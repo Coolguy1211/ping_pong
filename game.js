@@ -1,5 +1,36 @@
-const canvas = document.getElementById('pong');
-const ctx = canvas.getContext('2d');
+// Check if running in a browser environment
+const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+
+let canvas, ctx;
+if (isBrowser) {
+    canvas = document.getElementById('pong');
+    ctx = canvas.getContext('2d');
+} else {
+    // Provide a mock canvas for non-browser environments (like testing)
+    canvas = {
+        width: 800,
+        height: 500,
+        getContext: () => ({
+            fillRect: () => {},
+            strokeRect: () => {},
+            beginPath: () => {},
+            moveTo: () => {},
+            lineTo: () => {},
+            arc: () => {},
+            fill: () => {},
+            stroke: () => {},
+            fillText: () => {},
+            setLineDash: () => {},
+            save: () => {},
+            restore: () => {},
+            translate: () => {},
+        }),
+        addEventListener: () => {},
+        getBoundingClientRect: () => ({ top: 0, left: 0 })
+    };
+    ctx = canvas.getContext('2d');
+}
+
 
 // Game constants
 const PADDLE_WIDTH = 15;
@@ -49,6 +80,7 @@ class Particle {
     }
 
     draw() {
+        if (!isBrowser) return;
         ctx.globalAlpha = this.life;
         ctx.fillStyle = this.color;
         ctx.beginPath();
@@ -65,30 +97,45 @@ function createParticles(x, y, color) {
 }
 
 // Sound effects
-const hitSound = new Audio('https://kenney.nl/media/pages/assets/digital-audio/cd01f555fb-1677590265/kenney_digital-audio/phaserUp6.wav');
-const scoreSound = new Audio('https://kenney.nl/media/pages/assets/digital-audio/cd01f555fb-1677590265/kenney_digital-audio/powerUp1.wav');
-const wallSound = new Audio('https://kenney.nl/media/pages/assets/digital-audio/cd01f555fb-1677590265/kenney_digital-audio/phaserUp1.wav');
+let hitSound, scoreSound, wallSound;
+if (isBrowser) {
+    hitSound = new Audio('https://kenney.nl/media/pages/assets/digital-audio/cd01f555fb-1677590265/kenney_digital-audio/phaserUp6.wav');
+    scoreSound = new Audio('https://kenney.nl/media/pages/assets/digital-audio/cd01f555fb-1677590265/kenney_digital-audio/powerUp1.wav');
+    wallSound = new Audio('https://kenney.nl/media/pages/assets/digital-audio/cd01f555fb-1677590265/kenney_digital-audio/phaserUp1.wav');
+} else {
+    // Mock Audio for tests
+    const MockAudio = () => ({ play: () => {}, currentTime: 0 });
+    hitSound = MockAudio();
+    scoreSound = MockAudio();
+    wallSound = MockAudio();
+}
+
 
 function playSound(sound) {
+    if (!sound || !sound.play) return;
     sound.currentTime = 0;
     sound.play();
 }
 
 // Mouse control for left paddle
-canvas.addEventListener('mousemove', function(e) {
-    const rect = canvas.getBoundingClientRect();
-    playerY = e.clientY - rect.top - PADDLE_HEIGHT / 2;
-    playerY = Math.max(0, Math.min(canvas.height - PADDLE_HEIGHT, playerY));
-});
+if (isBrowser) {
+    canvas.addEventListener('mousemove', function(e) {
+        const rect = canvas.getBoundingClientRect();
+        playerY = e.clientY - rect.top - PADDLE_HEIGHT / 2;
+        playerY = Math.max(0, Math.min(canvas.height - PADDLE_HEIGHT, playerY));
+    });
 
-canvas.addEventListener('click', function() {
-    if (gameOver) {
-        resetGame();
-    }
-});
+    canvas.addEventListener('click', function() {
+        if (gameOver) {
+            resetGame();
+        }
+    });
+}
+
 
 // Draw everything
 function draw() {
+    if (!isBrowser) return;
     // Screen shake
     if (shakeDuration > 0) {
         ctx.save();
@@ -258,7 +305,77 @@ function loop() {
         update();
     }
     draw();
-    requestAnimationFrame(loop);
+    if (isBrowser) {
+        requestAnimationFrame(loop);
+    }
 }
 
-loop();
+// Start the game loop if in browser
+if (isBrowser) {
+    loop();
+}
+
+function init(mockCanvas) {
+    if (mockCanvas) {
+        canvas = mockCanvas;
+        ctx = canvas.getContext('2d');
+    }
+    playerY = canvas.height / 2 - PADDLE_HEIGHT / 2;
+    aiY = canvas.height / 2 - PADDLE_HEIGHT / 2;
+    ballX = canvas.width / 2;
+    ballY = canvas.height / 2;
+    ballSpeedX = 5 * (Math.random() < 0.5 ? 1 : -1);
+    ballSpeedY = (Math.random() * 4 - 2);
+    playerScore = 0;
+    aiScore = 0;
+    gameOver = false;
+    shakeDuration = 0;
+    particles = [];
+}
+
+// Export for testing
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        PADDLE_WIDTH, PADDLE_HEIGHT, BALL_RADIUS, WINNING_SCORE, PLAYER_X, AI_X,
+
+        // Let's export getters and setters for state to avoid direct manipulation
+        getState: () => ({
+            playerY, aiY, ballX, ballY, ballSpeedX, ballSpeedY,
+            playerScore, aiScore, gameOver, shakeDuration, shakeIntensity, particles
+        }),
+
+        setState: (newState) => {
+            playerY = newState.playerY !== undefined ? newState.playerY : playerY;
+            aiY = newState.aiY !== undefined ? newState.aiY : aiY;
+            ballX = newState.ballX !== undefined ? newState.ballX : ballX;
+            ballY = newState.ballY !== undefined ? newState.ballY : ballY;
+            ballSpeedX = newState.ballSpeedX !== undefined ? newState.ballSpeedX : ballSpeedX;
+            ballSpeedY = newState.ballSpeedY !== undefined ? newState.ballSpeedY : ballSpeedY;
+            playerScore = newState.playerScore !== undefined ? newState.playerScore : playerScore;
+            aiScore = newState.aiScore !== undefined ? newState.aiScore : aiScore;
+            gameOver = newState.gameOver !== undefined ? newState.gameOver : gameOver;
+            shakeDuration = newState.shakeDuration !== undefined ? newState.shakeDuration : shakeDuration;
+            shakeIntensity = newState.shakeIntensity !== undefined ? newState.shakeIntensity : shakeIntensity;
+            particles = newState.particles !== undefined ? newState.particles : particles;
+        },
+
+        triggerShake,
+        Particle,
+        createParticles,
+        playSound,
+        draw,
+        update,
+        resetBall,
+        resetGame,
+        loop,
+        init,
+
+        // Expose canvas for tests to mock
+        _private: {
+            get canvas() { return canvas; },
+            set canvas(newCanvas) { canvas = newCanvas; },
+            get ctx() { return ctx; },
+            set ctx(newCtx) { ctx = newCtx; }
+        }
+    };
+}
