@@ -1,0 +1,20 @@
+{
+  "name": "ping-pong-game",
+  "version": "1.0.0",
+  "description": "A simple Pong game built with HTML5 Canvas",
+  "main": "game.js",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "canvas": "^2.11.2"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "setupFilesAfterEnv": ["<rootDir>/test-setup.js"]
+  }
+}
