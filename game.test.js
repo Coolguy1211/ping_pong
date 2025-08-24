@@ -915,3 +915,49 @@ describe('Edge Cases and Error Handling', () => {
     expect(aiY).toBe(canvas.height - PADDLE_HEIGHT); // Should stay at boundary
   });
 });
+
+describe('Additional Edge Cases', () => {
+  beforeEach(() => {
+    resetGame();
+    particles.length = 0;
+  });
+
+  test('should handle ball speed Y modification at paddle center', () => {
+    ballX = PLAYER_X + PADDLE_WIDTH - BALL_RADIUS + 1;
+    ballY = playerY + PADDLE_HEIGHT / 2; // Exact center
+    ballSpeedX = -5;
+    ballSpeedY = 1;
+    
+    update();
+    
+    expect(ballSpeedY).toBe(1); // Should remain unchanged at center
+  });
+
+  test('should handle exact AI movement threshold', () => {
+    aiY = 100;
+    ballY = aiY + PADDLE_HEIGHT / 2 + 20; // Exactly at threshold
+    const initialAiY = aiY;
+    
+    update();
+    
+    expect(aiY).toBe(initialAiY); // Should not move at exact threshold
+  });
+
+  test('should handle exact AI movement threshold above', () => {
+    aiY = 100;
+    ballY = aiY + PADDLE_HEIGHT / 2 - 20; // Exactly at threshold above
+    const initialAiY = aiY;
+    
+    update();
+    
+    expect(aiY).toBe(initialAiY); // Should not move at exact threshold
+  });
+
+  test('should handle ball at exact scoring boundaries', () => {
+    ballX = 0 - BALL_RADIUS; // Exactly at left boundary
+    const initialAiScore = aiScore;
+    
+    update();
+    
+    expect(aiScore).toBe(initialAiScore + 1);
+  });
