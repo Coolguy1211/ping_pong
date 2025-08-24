@@ -65,6 +65,16 @@ describe('Game State Initialization', () => {
   test('should initialize shake duration to zero', () => {
     expect(shakeDuration).toBe(0);
   });
+
+  test('should initialize ball speed with random direction', () => {
+    expect(Math.abs(ballSpeedX)).toBe(5);
+    expect(ballSpeedY).toBeGreaterThanOrEqual(-2);
+    expect(ballSpeedY).toBeLessThanOrEqual(2);
+  });
+
+  test('should initialize shake intensity', () => {
+    expect(shakeIntensity).toBe(5);
+  });
 });
 
 describe('Screen Shake Functionality', () => {
@@ -101,6 +111,15 @@ describe('Particle System', () => {
       expect(particle.size).toBeLessThanOrEqual(6);
     });
 
+    test('should create particle with random size and speed', () => {
+      global.mockMathRandom(0.8);
+      const particle = new Particle(0, 0, '#000000');
+      
+      expect(particle.size).toBeCloseTo(5.2, 1); // 0.8 * 4 + 2
+      expect(particle.speedX).toBeCloseTo(1.2, 1); // 0.8 * 4 - 2
+      expect(particle.speedY).toBeCloseTo(1.2, 1); // 0.8 * 4 - 2
+    });
+
     test('should update particle position and life', () => {
       global.mockMathRandom(0.5);
       const particle = new Particle(100, 200, '#ff0000');
@@ -122,6 +141,20 @@ describe('Particle System', () => {
       particle.update();
       
       expect(particle.life).toBe(initialLife - 0.05);
+    });
+
+    test('should draw particle with correct properties', () => {
+      const particle = new Particle(50, 75, '#00ff00');
+      particle.size = 3;
+      particle.life = 0.7;
+      
+      particle.draw();
+      
+      expect(ctx.globalAlpha).toBe(1); // Should be reset after drawing
+      expect(ctx.fillStyle).toBe('#00ff00');
+      expect(ctx.beginPath).toHaveBeenCalled();
+      expect(ctx.arc).toHaveBeenCalledWith(50, 75, 3, 0, Math.PI * 2);
+      expect(ctx.fill).toHaveBeenCalled();
     });
   });
 
@@ -165,6 +198,17 @@ describe('Sound System', () => {
     expect(mockSound.currentTime).toBe(0);
     expect(mockSound.play).toHaveBeenCalled();
   });
+
+  test('should handle sound play errors gracefully', () => {
+    const mockSound = { 
+      currentTime: 3, 
+      play: jest.fn().mockRejectedValue(new Error('Play failed'))
+    };
+    
+    expect(() => playSound(mockSound)).not.toThrow();
+    expect(mockSound.currentTime).toBe(0);
+    expect(mockSound.play).toHaveBeenCalled();
+  });
 });
 
 describe('Ball Reset Functionality', () => {
@@ -193,6 +237,13 @@ describe('Ball Reset Functionality', () => {
     const initialShakeDuration = shakeDuration;
     resetBall();
     expect(shakeDuration).toBeGreaterThan(initialShakeDuration);
+  });
+
+  test('should play score sound when ball resets', () => {
+    const playSpy = jest.spyOn(scoreSound, 'play');
+    resetBall();
+    expect(scoreSound.currentTime).toBe(0);
+    expect(playSpy).toHaveBeenCalled();
   });
 });
 
@@ -256,6 +307,28 @@ describe('Game Update Logic', () => {
       expect(ballY).toBe(canvas.height - BALL_RADIUS);
       expect(ballSpeedY).toBe(-5); // Should reverse direction
     });
+
+    test('should play wall sound on top collision', () => {
+      ballY = BALL_RADIUS - 1;
+      ballSpeedY = -5;
+      const playSpy = jest.spyOn(wallSound, 'play');
+      
+      update();
+      
+      expect(wallSound.currentTime).toBe(0);
+      expect(playSpy).toHaveBeenCalled();
+    });
+
+    test('should play wall sound on bottom collision', () => {
+      ballY = canvas.height - BALL_RADIUS + 1;
+      ballSpeedY = 5;
+      const playSpy = jest.spyOn(wallSound, 'play');
+      
+      update();
+      
+      expect(wallSound.currentTime).toBe(0);
+      expect(playSpy).toHaveBeenCalled();
+    });
   });
 
   describe('Paddle Collision', () => {
@@ -279,6 +352,76 @@ describe('Game Update Logic', () => {
       
       expect(ballX).toBe(AI_X - BALL_RADIUS);
       expect(ballSpeedX).toBe(-5); // Should reverse direction
+    });
+
+    test('should modify ball Y speed based on paddle hit position for player', () => {
+      ballX = PLAYER_X + PADDLE_WIDTH - BALL_RADIUS + 1;
+      ballY = playerY + PADDLE_HEIGHT * 0.75; // Hit lower part of paddle
+      ballSpeedX = -5;
+      ballSpeedY = 0;
+      
+      update();
+      
+      expect(ballSpeedY).toBeGreaterThan(0); // Should angle downward
+    });
+
+    test('should modify ball Y speed based on paddle hit position for AI', () => {
+      ballX = AI_X + BALL_RADIUS - 1;
+      ballY = aiY + PADDLE_HEIGHT * 0.25; // Hit upper part of paddle
+      ballSpeedX = 5;
+      ballSpeedY = 0;
+      
+      update();
+      
+      expect(ballSpeedY).toBeLessThan(0); // Should angle upward
+    });
+
+    test('should create particles on player paddle collision', () => {
+      ballX = PLAYER_X + PADDLE_WIDTH - BALL_RADIUS + 1;
+      ballY = playerY + PADDLE_HEIGHT / 2;
+      ballSpeedX = -5;
+      particles.length = 0;
+      
+      update();
+      
+      expect(particles.length).toBe(15);
+      expect(particles[0].color).toBe('#0f0');
+    });
+
+    test('should create particles on AI paddle collision', () => {
+      ballX = AI_X + BALL_RADIUS - 1;
+      ballY = aiY + PADDLE_HEIGHT / 2;
+      ballSpeedX = 5;
+      particles.length = 0;
+      
+      update();
+      
+      expect(particles.length).toBe(15);
+      expect(particles[0].color).toBe('#f00');
+    });
+
+    test('should play hit sound on player paddle collision', () => {
+      ballX = PLAYER_X + PADDLE_WIDTH - BALL_RADIUS + 1;
+      ballY = playerY + PADDLE_HEIGHT / 2;
+      ballSpeedX = -5;
+      const playSpy = jest.spyOn(hitSound, 'play');
+      
+      update();
+      
+      expect(hitSound.currentTime).toBe(0);
+      expect(playSpy).toHaveBeenCalled();
+    });
+
+    test('should play hit sound on AI paddle collision', () => {
+      ballX = AI_X + BALL_RADIUS - 1;
+      ballY = aiY + PADDLE_HEIGHT / 2;
+      ballSpeedX = 5;
+      const playSpy = jest.spyOn(hitSound, 'play');
+      
+      update();
+      
+      expect(hitSound.currentTime).toBe(0);
+      expect(playSpy).toHaveBeenCalled();
     });
 
     test('should not collide with player paddle when ball is outside paddle height', () => {
@@ -333,6 +476,24 @@ describe('Game Update Logic', () => {
       update();
       
       expect(aiY).toBe(initialAiY);
+    });
+
+    test('should move AI paddle by 6 pixels when ball is far below', () => {
+      aiY = 100;
+      ballY = aiY + PADDLE_HEIGHT / 2 + 25; // Ball below AI center by more than 20
+      
+      update();
+      
+      expect(aiY).toBe(106); // Should move down by 6
+    });
+
+    test('should move AI paddle by 6 pixels when ball is far above', () => {
+      aiY = 200;
+      ballY = aiY + PADDLE_HEIGHT / 2 - 25; // Ball above AI center by more than 20
+      
+      update();
+      
+      expect(aiY).toBe(194); // Should move up by 6
     });
 
     test('should keep AI paddle within canvas bounds', () => {
@@ -406,6 +567,205 @@ describe('Game Update Logic', () => {
   });
 });
 
+describe('Drawing Functions', () => {
+  beforeEach(() => {
+    // Reset canvas context mocks
+    jest.clearAllMocks();
+    particles.length = 0;
+    shakeDuration = 0;
+    gameOver = false;
+  });
+
+  describe('draw() function', () => {
+    test('should draw background with trail effect', () => {
+      draw();
+      
+      expect(ctx.fillStyle).toHaveBeenCalledWith('rgba(17, 17, 17, 0.3)');
+      expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, canvas.width, canvas.height);
+    });
+
+    test('should draw middle line with dashed pattern', () => {
+      draw();
+      
+      expect(ctx.strokeStyle).toHaveBeenCalledWith('#555');
+      expect(ctx.setLineDash).toHaveBeenCalledWith([10, 10]);
+      expect(ctx.beginPath).toHaveBeenCalled();
+      expect(ctx.moveTo).toHaveBeenCalledWith(canvas.width/2, 0);
+      expect(ctx.lineTo).toHaveBeenCalledWith(canvas.width/2, canvas.height);
+      expect(ctx.stroke).toHaveBeenCalled();
+      expect(ctx.setLineDash).toHaveBeenCalledWith([]);
+    });
+
+    test('should draw player paddle in green', () => {
+      draw();
+      
+      expect(ctx.fillStyle).toHaveBeenCalledWith('#0f0');
+      expect(ctx.fillRect).toHaveBeenCalledWith(PLAYER_X, playerY, PADDLE_WIDTH, PADDLE_HEIGHT);
+    });
+
+    test('should draw AI paddle in red', () => {
+      draw();
+      
+      expect(ctx.fillStyle).toHaveBeenCalledWith('#f00');
+      expect(ctx.fillRect).toHaveBeenCalledWith(AI_X, aiY, PADDLE_WIDTH, PADDLE_HEIGHT);
+    });
+
+    test('should draw ball in white', () => {
+      draw();
+      
+      expect(ctx.beginPath).toHaveBeenCalled();
+      expect(ctx.arc).toHaveBeenCalledWith(ballX, ballY, BALL_RADIUS, 0, Math.PI*2);
+      expect(ctx.fillStyle).toHaveBeenCalledWith('#fff');
+      expect(ctx.fill).toHaveBeenCalled();
+    });
+
+    test('should draw scores', () => {
+      playerScore = 3;
+      aiScore = 2;
+      
+      draw();
+      
+      expect(ctx.font).toHaveBeenCalledWith('36px Arial');
+      expect(ctx.fillStyle).toHaveBeenCalledWith('#fff');
+      expect(ctx.fillText).toHaveBeenCalledWith(3, canvas.width/2 - 50, 50);
+      expect(ctx.fillText).toHaveBeenCalledWith(2, canvas.width/2 + 20, 50);
+    });
+
+    test('should apply screen shake when shakeDuration > 0', () => {
+      shakeDuration = 5;
+      shakeIntensity = 10;
+      global.mockMathRandom(0.7);
+      
+      draw();
+      
+      expect(ctx.save).toHaveBeenCalled();
+      expect(ctx.translate).toHaveBeenCalled();
+      expect(ctx.restore).toHaveBeenCalled();
+      expect(shakeDuration).toBe(4); // Should decrease by 1
+    });
+
+    test('should not apply screen shake when shakeDuration is 0', () => {
+      shakeDuration = 0;
+      
+      draw();
+      
+      expect(ctx.save).not.toHaveBeenCalled();
+      expect(ctx.translate).not.toHaveBeenCalled();
+      expect(ctx.restore).not.toHaveBeenCalled();
+    });
+
+    test('should draw particles and update them', () => {
+      const particle1 = new Particle(100, 100, '#ff0000');
+      const particle2 = new Particle(200, 200, '#00ff00');
+      particles.push(particle1, particle2);
+      
+      const updateSpy1 = jest.spyOn(particle1, 'update');
+      const drawSpy1 = jest.spyOn(particle1, 'draw');
+      const updateSpy2 = jest.spyOn(particle2, 'update');
+      const drawSpy2 = jest.spyOn(particle2, 'draw');
+      
+      draw();
+      
+      expect(updateSpy1).toHaveBeenCalled();
+      expect(drawSpy1).toHaveBeenCalled();
+      expect(updateSpy2).toHaveBeenCalled();
+      expect(drawSpy2).toHaveBeenCalled();
+    });
+
+    test('should remove dead particles', () => {
+      const aliveParticle = new Particle(100, 100, '#ff0000');
+      const deadParticle = new Particle(200, 200, '#00ff00');
+      deadParticle.life = 0; // Dead particle
+      particles.push(aliveParticle, deadParticle);
+      
+      draw();
+      
+      expect(particles.length).toBe(1);
+      expect(particles[0]).toBe(aliveParticle);
+    });
+
+    test('should draw game over screen when game is over', () => {
+      gameOver = true;
+      playerScore = 5;
+      
+      draw();
+      
+      expect(ctx.fillStyle).toHaveBeenCalledWith('rgba(0, 0, 0, 0.7)');
+      expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, canvas.width, canvas.height);
+      expect(ctx.fillStyle).toHaveBeenCalledWith('#fff');
+      expect(ctx.font).toHaveBeenCalledWith('60px Arial');
+      expect(ctx.textAlign).toHaveBeenCalledWith('center');
+      expect(ctx.fillText).toHaveBeenCalledWith('You Win!', canvas.width / 2, canvas.height / 2 - 40);
+      expect(ctx.font).toHaveBeenCalledWith('24px Arial');
+      expect(ctx.fillText).toHaveBeenCalledWith('Click to Restart', canvas.width / 2, canvas.height / 2 + 20);
+    });
+
+    test('should show "Game Over" message when AI wins', () => {
+      gameOver = true;
+      playerScore = 2;
+      aiScore = 5;
+      
+      draw();
+      
+      expect(ctx.fillText).toHaveBeenCalledWith('Game Over', canvas.width / 2, canvas.height / 2 - 40);
+    });
+
+    test('should show "You Win!" message when player wins', () => {
+      gameOver = true;
+      playerScore = 5;
+      aiScore = 2;
+      
+      draw();
+      
+      expect(ctx.fillText).toHaveBeenCalledWith('You Win!', canvas.width / 2, canvas.height / 2 - 40);
+    });
+  });
+});
+
+describe('Game Loop', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('should call update when game is not over', () => {
+    gameOver = false;
+    const originalUpdate = global.update;
+    global.update = jest.fn();
+    
+    loop();
+    
+    expect(global.update).toHaveBeenCalled();
+    expect(global.requestAnimationFrame).toHaveBeenCalledWith(loop);
+    
+    global.update = originalUpdate;
+  });
+
+  test('should not call update when game is over', () => {
+    gameOver = true;
+    const originalUpdate = global.update;
+    global.update = jest.fn();
+    
+    loop();
+    
+    expect(global.update).not.toHaveBeenCalled();
+    expect(global.requestAnimationFrame).toHaveBeenCalledWith(loop);
+    
+    global.update = originalUpdate;
+  });
+
+  test('should always call draw and requestAnimationFrame', () => {
+    const originalDraw = global.draw;
+    global.draw = jest.fn();
+    
+    loop();
+    
+    expect(global.draw).toHaveBeenCalled();
+    expect(global.requestAnimationFrame).toHaveBeenCalledWith(loop);
+    
+    global.draw = originalDraw;
+  });
+});
+
 describe('Mouse Controls', () => {
   test('should update player paddle position on mouse move', () => {
     const mockEvent = {
@@ -417,6 +777,14 @@ describe('Mouse Controls', () => {
       .find(call => call[0] === 'mousemove')[1];
     
     mouseMoveHandler(mockEvent);
+
+describe('Game Initialization', () => {
+  test('should start the game loop automatically', () => {
+    // The game loop should be called automatically when the script loads
+    // This is tested by verifying that requestAnimationFrame was called
+    expect(global.requestAnimationFrame).toHaveBeenCalled();
+  });
+});
     
     expect(playerY).toBe(250 - PADDLE_HEIGHT / 2);
   });
@@ -477,3 +845,127 @@ describe('Mouse Controls', () => {
     expect(aiScore).toBe(1);
   });
 });
+
+describe('Edge Cases and Error Handling', () => {
+  test('should handle particle with negative life', () => {
+    const particle = new Particle(0, 0, '#000000');
+    particle.life = -0.1;
+    particles.push(particle);
+    
+    draw();
+    
+    expect(particles.length).toBe(0); // Should be removed
+  });
+
+  test('should handle multiple particles with different life values', () => {
+    const particle1 = new Particle(0, 0, '#000000');
+    const particle2 = new Particle(0, 0, '#000000');
+    const particle3 = new Particle(0, 0, '#000000');
+    
+    particle1.life = 0.5;
+    particle2.life = 0;
+    particle3.life = -0.1;
+    
+    particles.push(particle1, particle2, particle3);
+    
+    draw();
+    
+    expect(particles.length).toBe(1); // Only particle1 should remain
+    expect(particles[0]).toBe(particle1);
+  });
+
+  test('should handle extreme shake values', () => {
+    shakeDuration = 1000;
+    shakeIntensity = 100;
+    
+    draw();
+    
+    expect(shakeDuration).toBe(999); // Should decrease by 1
+    expect(ctx.save).toHaveBeenCalled();
+    expect(ctx.restore).toHaveBeenCalled();
+  });
+
+  test('should handle ball collision at exact paddle boundaries', () => {
+    ballX = PLAYER_X + PADDLE_WIDTH;
+    ballY = playerY;
+    ballSpeedX = -5;
+    
+    update();
+    
+    expect(ballSpeedX).toBe(5); // Should reverse
+  });
+
+  test('should handle ball collision at exact AI paddle boundaries', () => {
+    ballX = AI_X;
+    ballY = aiY;
+    ballSpeedX = 5;
+    
+    update();
+    
+    expect(ballSpeedX).toBe(-5); // Should reverse
+  });
+
+  test('should handle AI paddle at exact canvas boundaries', () => {
+    aiY = 0;
+    ballY = -50; // Ball above canvas
+    
+    update();
+    
+    expect(aiY).toBe(0); // Should stay at boundary
+  });
+
+  test('should handle AI paddle at exact bottom boundary', () => {
+    aiY = canvas.height - PADDLE_HEIGHT;
+    ballY = canvas.height + 50; // Ball below canvas
+    
+    update();
+    
+    expect(aiY).toBe(canvas.height - PADDLE_HEIGHT); // Should stay at boundary
+  });
+});
+
+describe('Additional Edge Cases', () => {
+  beforeEach(() => {
+    resetGame();
+    particles.length = 0;
+  });
+
+  test('should handle ball speed Y modification at paddle center', () => {
+    ballX = PLAYER_X + PADDLE_WIDTH - BALL_RADIUS + 1;
+    ballY = playerY + PADDLE_HEIGHT / 2; // Exact center
+    ballSpeedX = -5;
+    ballSpeedY = 1;
+    
+    update();
+    
+    expect(ballSpeedY).toBe(1); // Should remain unchanged at center
+  });
+
+  test('should handle exact AI movement threshold', () => {
+    aiY = 100;
+    ballY = aiY + PADDLE_HEIGHT / 2 + 20; // Exactly at threshold
+    const initialAiY = aiY;
+    
+    update();
+    
+    expect(aiY).toBe(initialAiY); // Should not move at exact threshold
+  });
+
+  test('should handle exact AI movement threshold above', () => {
+    aiY = 100;
+    ballY = aiY + PADDLE_HEIGHT / 2 - 20; // Exactly at threshold above
+    const initialAiY = aiY;
+    
+    update();
+    
+    expect(aiY).toBe(initialAiY); // Should not move at exact threshold
+  });
+
+  test('should handle ball at exact scoring boundaries', () => {
+    ballX = 0 - BALL_RADIUS; // Exactly at left boundary
+    const initialAiScore = aiScore;
+    
+    update();
+    
+    expect(aiScore).toBe(initialAiScore + 1);
+  });
