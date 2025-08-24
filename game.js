@@ -18,6 +18,60 @@ let ballSpeedY = (Math.random() * 4 - 2);
 let playerScore = 0;
 let aiScore = 0;
 
+// Screen shake
+let shakeDuration = 0;
+let shakeIntensity = 5;
+
+function triggerShake(duration, intensity) {
+    shakeDuration = duration;
+    shakeIntensity = intensity;
+}
+
+// Particles
+let particles = [];
+class Particle {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.size = Math.random() * 4 + 2;
+        this.speedX = Math.random() * 4 - 2;
+        this.speedY = Math.random() * 4 - 2;
+        this.life = 1;
+    }
+
+    update() {
+        this.x += this.speedX;
+        this.y += this.speedY;
+        this.life -= 0.05;
+    }
+
+    draw() {
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+}
+
+function createParticles(x, y, color) {
+    for (let i = 0; i < 15; i++) {
+        particles.push(new Particle(x, y, color));
+    }
+}
+
+// Sound effects
+const hitSound = new Audio('https://kenney.nl/media/pages/assets/digital-audio/cd01f555fb-1677590265/kenney_digital-audio/phaserUp6.wav');
+const scoreSound = new Audio('https://kenney.nl/media/pages/assets/digital-audio/cd01f555fb-1677590265/kenney_digital-audio/powerUp1.wav');
+const wallSound = new Audio('https://kenney.nl/media/pages/assets/digital-audio/cd01f555fb-1677590265/kenney_digital-audio/phaserUp1.wav');
+
+function playSound(sound) {
+    sound.currentTime = 0;
+    sound.play();
+}
+
 // Mouse control for left paddle
 canvas.addEventListener('mousemove', function(e) {
     const rect = canvas.getBoundingClientRect();
@@ -27,8 +81,17 @@ canvas.addEventListener('mousemove', function(e) {
 
 // Draw everything
 function draw() {
-    // Background
-    ctx.fillStyle = "#111";
+    // Screen shake
+    if (shakeDuration > 0) {
+        ctx.save();
+        const dx = (Math.random() - 0.5) * shakeIntensity;
+        const dy = (Math.random() - 0.5) * shakeIntensity;
+        ctx.translate(dx, dy);
+        shakeDuration--;
+    }
+
+    // Background (with trail effect)
+    ctx.fillStyle = "rgba(17, 17, 17, 0.3)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Middle line
@@ -59,6 +122,20 @@ function draw() {
     ctx.fillStyle = "#fff";
     ctx.fillText(playerScore, canvas.width/2 - 50, 50);
     ctx.fillText(aiScore, canvas.width/2 + 20, 50);
+
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update();
+        particles[i].draw();
+        if (particles[i].life <= 0) {
+            particles.splice(i, 1);
+        }
+    }
+
+    // Restore context after shake
+    if (shakeDuration > 0) {
+        ctx.restore();
+    }
 }
 
 // Ball and paddle collision detection
@@ -71,10 +148,12 @@ function update() {
     if (ballY - BALL_RADIUS < 0) {
         ballY = BALL_RADIUS;
         ballSpeedY = -ballSpeedY;
+        playSound(wallSound);
     }
     if (ballY + BALL_RADIUS > canvas.height) {
         ballY = canvas.height - BALL_RADIUS;
         ballSpeedY = -ballSpeedY;
+        playSound(wallSound);
     }
 
     // Paddle collision (player)
@@ -86,6 +165,8 @@ function update() {
         ballX = PLAYER_X + PADDLE_WIDTH + BALL_RADIUS;
         ballSpeedX = -ballSpeedX;
         ballSpeedY += ((ballY - (playerY + PADDLE_HEIGHT / 2)) / (PADDLE_HEIGHT / 2)) * 3;
+        playSound(hitSound);
+        createParticles(ballX, ballY, "#0f0");
     }
 
     // Paddle collision (AI)
@@ -97,6 +178,8 @@ function update() {
         ballX = AI_X - BALL_RADIUS;
         ballSpeedX = -ballSpeedX;
         ballSpeedY += ((ballY - (aiY + PADDLE_HEIGHT / 2)) / (PADDLE_HEIGHT / 2)) * 3;
+        playSound(hitSound);
+        createParticles(ballX, ballY, "#f00");
     }
 
     // AI movement - simple follows ball with some lag
@@ -121,6 +204,8 @@ function update() {
 
 // Reset ball to center
 function resetBall() {
+    playSound(scoreSound);
+    triggerShake(20, 10);
     ballX = canvas.width / 2;
     ballY = canvas.height / 2;
     ballSpeedX = 5 * (Math.random() < 0.5 ? 1 : -1);
