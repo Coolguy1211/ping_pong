@@ -5,6 +5,7 @@ const ctx = canvas.getContext('2d');
 const PADDLE_WIDTH = 15;
 const PADDLE_HEIGHT = 100;
 const BALL_RADIUS = 12;
+const WINNING_SCORE = 5;
 const PLAYER_X = 20;
 const AI_X = canvas.width - PADDLE_WIDTH - 20;
 
@@ -17,6 +18,7 @@ let ballSpeedX = 5 * (Math.random() < 0.5 ? 1 : -1);
 let ballSpeedY = (Math.random() * 4 - 2);
 let playerScore = 0;
 let aiScore = 0;
+let gameOver = false;
 
 // Screen shake
 let shakeDuration = 0;
@@ -79,6 +81,12 @@ canvas.addEventListener('mousemove', function(e) {
     playerY = Math.max(0, Math.min(canvas.height - PADDLE_HEIGHT, playerY));
 });
 
+canvas.addEventListener('click', function() {
+    if (gameOver) {
+        resetGame();
+    }
+});
+
 // Draw everything
 function draw() {
     // Screen shake
@@ -135,6 +143,22 @@ function draw() {
     // Restore context after shake
     if (shakeDuration > 0) {
         ctx.restore();
+    }
+
+    // Game Over screen
+    if (gameOver) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "#fff";
+        ctx.font = "60px Arial";
+        ctx.textAlign = "center";
+
+        let message = (playerScore >= WINNING_SCORE) ? "You Win!" : "Game Over";
+        ctx.fillText(message, canvas.width / 2, canvas.height / 2 - 40);
+
+        ctx.font = "24px Arial";
+        ctx.fillText("Click to Restart", canvas.width / 2, canvas.height / 2 + 20);
     }
 }
 
@@ -194,11 +218,19 @@ function update() {
     // Score update and reset
     if (ballX - BALL_RADIUS < 0) {
         aiScore++;
-        resetBall();
+        if (aiScore >= WINNING_SCORE) {
+            gameOver = true;
+        } else {
+            resetBall();
+        }
     }
     if (ballX + BALL_RADIUS > canvas.width) {
         playerScore++;
-        resetBall();
+        if (playerScore >= WINNING_SCORE) {
+            gameOver = true;
+        } else {
+            resetBall();
+        }
     }
 }
 
@@ -212,9 +244,19 @@ function resetBall() {
     ballSpeedY = (Math.random() * 4 - 2);
 }
 
+// Reset the full game
+function resetGame() {
+    playerScore = 0;
+    aiScore = 0;
+    gameOver = false;
+    resetBall();
+}
+
 // Main game loop
 function loop() {
-    update();
+    if (!gameOver) {
+        update();
+    }
     draw();
     requestAnimationFrame(loop);
 }
