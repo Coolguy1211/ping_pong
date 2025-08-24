@@ -777,6 +777,14 @@ describe('Mouse Controls', () => {
       .find(call => call[0] === 'mousemove')[1];
     
     mouseMoveHandler(mockEvent);
+
+describe('Game Initialization', () => {
+  test('should start the game loop automatically', () => {
+    // The game loop should be called automatically when the script loads
+    // This is tested by verifying that requestAnimationFrame was called
+    expect(global.requestAnimationFrame).toHaveBeenCalled();
+  });
+});
     
     expect(playerY).toBe(250 - PADDLE_HEIGHT / 2);
   });
